@@ -1,0 +1,18 @@
+# Go
+backend/*.exe
+backend/vendor/
+
+# Node
+frontend/node_modules/
+frontend/.next/
+
+# Env / secrets
+.env
+*.env.local
+
+# OS
+.DS_Store
+
+#Artifacts storage (local dev)
+backend/data/
+

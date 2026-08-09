@@ -36,7 +36,24 @@ func main() {
 	mux.HandleFunc("POST /jobs", server.HandleCreateJob)
 	mux.HandleFunc("GET /jobs/{id}", server.HandleGetJob)
 	mux.HandleFunc("GET /jobs/{id}/artifacts", server.HandleGetJobArtifacts)
+	mux.Handle("GET /artifacts/", http.StripPrefix("/artifacts/", http.FileServer(http.Dir("data/artifacts"))))
 
 	log.Println("API server listening on :8080")
-	log.Fatal(http.ListenAndServe(":8080", mux))
+	log.Fatal(http.ListenAndServe(":8080", withCORS(mux)))
+}
+
+// withCORS wraps a handler, adding headers that allow the vite dev server (a different origin) to call this API from the browser.
+func withCORS(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "http://localhost:5173")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
 }

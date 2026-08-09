@@ -56,23 +56,3 @@ async function renderArtifacts(artifacts: Artifact[]) {
     }
   }
 }
-
-/* ________________TESTING CODE__________________
-
-async function run() {
-  const job =  await createJob("https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf");
-  console.log("Created Job: ", job);
-
-  //Wait a moment for the worker to process it.
-  await new Promise((resolve) => setTimeout(resolve, 2000));
-
-  const updatedJob = await getJob(job.id);
-  console.log("Job status: ", updatedJob.status);
-
-  const artifacts = await getJobArtifacts(job.id);
-  console.log("Artifacts:", artifacts);
-}
-
-run()
-
-*/

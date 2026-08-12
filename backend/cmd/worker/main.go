@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/JerChol/licensed-media-preview-platform/internal/config"
@@ -89,6 +90,24 @@ func processJob(ctx context.Context, s *store.PostgresStore, jobID string) {
 		log.Printf("failed to save artifact record for job %s: %v", jobID, err)
 		s.UpdateJobStatus(ctx, jobID, models.JobStatusFailed)
 		return
+	}
+
+	thumbPrefix := filepath.Join("data", "artifacts", jobID, "thumbnail")
+	thumbPath, err := pdfpipeline.GenerateThumbnail(localPath, thumbPrefix)
+	if err != nil {
+		log.Printf("thumbnail generation failed for job %s: %v", jobID, err)
+		// Not fatal - we still have the text snippet, so don't fail the whole job
+	} else {
+		thumbArtifact := models.Artifact{
+			ID:           uuid.NewString(),
+			JobID:        jobID,
+			ArtifactType: "thumbnail",
+			StoragePath:  thumbPath,
+			CreatedAt:    time.Now(),
+		}
+		if err := s.SaveArtifact(ctx, thumbArtifact); err != nil {
+			log.Printf("failed to save thumbnail artifact for job %s: %v", jobID, err)
+		}
 	}
 
 	if err := s.UpdateJobStatus(ctx, jobID, models.JobStatusDone); err != nil {

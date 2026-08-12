@@ -2,6 +2,14 @@ import type { Job, Artifact } from "./types.js";
 
 const API_BASE = "http://localhost:8080";
 
+export class JobCreationError extends Error {
+  code: string;
+  constructor(code: string, message: string){
+    super(message);
+    this.code = code;
+  }
+}
+
 // Send a URL to the backend to create a new preview job.
 export async function createJob(url: string): Promise<Job> {
   const response = await fetch(`${API_BASE}/jobs`, {
@@ -12,7 +20,9 @@ export async function createJob(url: string): Promise<Job> {
 
   if (!response.ok) {
     const errorBody = await response.json();
-    throw new Error(errorBody.message ?? "Failed to create job");
+    throw new JobCreationError(
+      errorBody.error_code ?? "unknown_error",
+      errorBody.message ?? "Failed to create job");
   }
 
   return response.json() as Promise<Job>;

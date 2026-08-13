@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
@@ -24,7 +25,14 @@ func main() {
 		log.Fatalf("failed to connect to postgres: %v", err)
 	}
 
-	jobQueue := queue.NewRedisQueue("localhost:6379")
+	s3Cfg := config.LoadS3Config()
+	s3Store, err := storage.NewS3Storage(ctx, s3Cfg.BucketName, s3Cfg.Region)
+	if err != nil {
+		log.Fatalf("failed to set up s3 storage: %v", err)
+	}
+
+	redisCfg := config.LoadRedisConfig()
+	jobQueue := queue.NewRedisQueue(redisCfg.Addr, redisCfg.Password, redisCfg.UseTLS)
 
 	log.Println("Worker started, waiting for jobs...")
 
@@ -37,12 +45,12 @@ func main() {
 		log.Printf("Picked up jobs: %s", jobID)
 
 		// Actual processing (PDF pipeline)
-		processJob(ctx, pgStore, jobID)
+		processJob(ctx, pgStore, s3Store, jobID)
 	}
 }
 
 // processJob handles a single job. For now this just marks it as processing, then done - real PDF work comes in the next step
-func processJob(ctx context.Context, s *store.PostgresStore, jobID string) {
+func processJob(ctx context.Context, s *store.PostgresStore, s3s *storage.S3Storage, jobID string) {
 	if err := s.UpdateJobStatus(ctx, jobID, models.JobStatusProcessing); err != nil {
 		log.Printf("failed to mark job %s as processing: %v", jobID, err)
 		return
@@ -70,20 +78,20 @@ func processJob(ctx context.Context, s *store.PostgresStore, jobID string) {
 		return
 	}
 
-	snippetPath, err := storage.SaveTextSnippet(jobID, result.TextSnippet)
-	if err != nil {
-		log.Printf("failed to save snippet for job %s: %v", jobID, err)
+	snippetKey := fmt.Sprintf("jobs/%s/snippet.txt", jobID)
+	if err := s3s.UploadBytes(ctx, snippetKey, []byte(result.TextSnippet), "text/plain"); err != nil {
+		log.Printf("failed to upload snippet for job %s: %v", jobID, err)
 		s.UpdateJobStatus(ctx, jobID, models.JobStatusFailed)
 		return
 	}
 
-	log.Printf("job %s: extracted %d pages, snippet saved to %s", jobID, result.PageCount, snippetPath)
+	log.Printf("job %s: extracted %d pages, snippet saved to %s", jobID, result.PageCount, snippetKey)
 
 	artifact := models.Artifact{
 		ID:           uuid.NewString(),
 		JobID:        jobID,
 		ArtifactType: "text_snippet",
-		StoragePath:  snippetPath,
+		StoragePath:  snippetKey,
 		CreatedAt:    time.Now(),
 	}
 	if err := s.SaveArtifact(ctx, artifact); err != nil {
@@ -92,21 +100,28 @@ func processJob(ctx context.Context, s *store.PostgresStore, jobID string) {
 		return
 	}
 
-	thumbPrefix := filepath.Join("data", "artifacts", jobID, "thumbnail")
-	thumbPath, err := pdfpipeline.GenerateThumbnail(localPath, thumbPrefix)
+	thumbLocalPrefix := filepath.Join(os.TempDir(), jobID+"-thumbnail")
+	thumbLocalPath, err := pdfpipeline.GenerateThumbnail(localPath, thumbLocalPrefix)
 	if err != nil {
 		log.Printf("thumbnail generation failed for job %s: %v", jobID, err)
 		// Not fatal - we still have the text snippet, so don't fail the whole job
 	} else {
-		thumbArtifact := models.Artifact{
-			ID:           uuid.NewString(),
-			JobID:        jobID,
-			ArtifactType: "thumbnail",
-			StoragePath:  thumbPath,
-			CreatedAt:    time.Now(),
-		}
-		if err := s.SaveArtifact(ctx, thumbArtifact); err != nil {
-			log.Printf("failed to save thumbnail artifact for job %s: %v", jobID, err)
+		defer os.Remove(thumbLocalPath)
+
+		thumbKey := fmt.Sprintf("jobs/%s/thumbnail.jpg", jobID)
+		if err := s3s.UploadFile(ctx, thumbLocalPath, thumbKey, "image/jpeg"); err != nil {
+			log.Printf("failed to upload thumbnail for job %s: %v", jobID, err)
+		} else {
+			thumbArtifact := models.Artifact{
+				ID:           uuid.NewString(),
+				JobID:        jobID,
+				ArtifactType: "thumbnail",
+				StoragePath:  thumbKey,
+				CreatedAt:    time.Now(),
+			}
+			if err := s.SaveArtifact(ctx, thumbArtifact); err != nil {
+				log.Printf("failed to save thumbnail artifact for job %s: %v", jobID, err)
+			}
 		}
 	}
 

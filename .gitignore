@@ -9,6 +9,7 @@ frontend/.next/
 # Env / secrets
 .env
 *.env.local
+.envrc
 
 # OS
 .DS_Store

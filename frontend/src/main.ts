@@ -58,7 +58,7 @@ async function renderArtifacts(artifacts: Artifact[]) {
 
   for (const artifact of artifacts) {
     const publicPath = artifact.storage_path.replace(/^data\//, "");
-    const fileUrl = `http://localhost:8080/${publicPath}`;
+    const fileUrl = `http://localhost:8080/artifacts/${artifact.id}`;
 
     if (artifact.artifact_type === "text_snippet"){
       const response = await fetch(fileUrl);

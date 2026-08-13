@@ -2,6 +2,7 @@ package queue
 
 import (
 	"context"
+	"crypto/tls"
 
 	"github.com/redis/go-redis/v9"
 )
@@ -15,10 +16,17 @@ type RedisQueue struct {
 }
 
 // NewRedisQueue creates a queue connected to the given Redis address, e.g. "localhost:6379"
-func NewRedisQueue(addr string) *RedisQueue {
-	client := redis.NewClient(&redis.Options{
-		Addr: addr,
-	})
+// If useTLS is true, connects over TLS
+func NewRedisQueue(addr string, password string, useTLS bool) *RedisQueue {
+	opts := &redis.Options{
+		Addr:     addr,
+		Password: password,
+	}
+	if useTLS {
+		opts.TLSConfig = &tls.Config{}
+	}
+
+	client := redis.NewClient(opts)
 	return &RedisQueue{client: client}
 }
 

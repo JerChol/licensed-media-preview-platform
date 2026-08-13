@@ -9,6 +9,7 @@ import (
 	"github.com/JerChol/licensed-media-preview-platform/internal/models"
 	"github.com/JerChol/licensed-media-preview-platform/internal/queue"
 	"github.com/JerChol/licensed-media-preview-platform/internal/resolver"
+	"github.com/JerChol/licensed-media-preview-platform/internal/storage"
 	"github.com/JerChol/licensed-media-preview-platform/internal/store"
 	"github.com/google/uuid"
 )
@@ -18,6 +19,7 @@ type Server struct {
 	Store   *store.PostgresStore
 	Sources []models.Source
 	Queue   *queue.RedisQueue
+	S3      *storage.S3Storage
 }
 
 // createJobRequest is the shape we expect in the POST / jobs body
@@ -108,4 +110,25 @@ func (s *Server) HandleGetJobArtifacts(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(artifacts)
+}
+
+// HandleGetArtifactFile handles GET /artifacts/{artifactId}, proxying the file's bytes from S3 without exposing the bucket directly.
+func (s *Server) HandleGetArtifactFile(w http.ResponseWriter, r *http.Request) {
+	artifactID := r.PathValue("artifactId")
+
+	key, err := s.Store.GetArtifactStoragePath(r.Context(), artifactID)
+	if err != nil {
+		http.Error(w, `{"error":"artifact not found"}`, http.StatusNotFound)
+		return
+	}
+
+	content, contentType, err := s.S3.DownloadObject(r.Context(), key)
+	if err != nil {
+		log.Printf("failed to download artifact %s: %v", artifactID, err)
+		http.Error(w, `{"error":"failed to fetch artifact"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", contentType)
+	w.Write(content)
 }

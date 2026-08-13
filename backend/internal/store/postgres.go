@@ -118,3 +118,12 @@ func (s *PostgresStore) UpdateJobStatus(ctx context.Context, id string, status m
 	`, status, id)
 	return err
 }
+
+// GetArtifactStoragePath returns the storage key for a songle artifact by ID.
+func (s *PostgresStore) GetArtifactStoragePath(ctx context.Context, artifactID string) (string, error) {
+	var path string
+	err := s.pool.QueryRow(ctx, `
+		SELECT storage_path FROM artifacts WHERE id = $1
+	`, artifactID).Scan(&path)
+	return path, err
+}

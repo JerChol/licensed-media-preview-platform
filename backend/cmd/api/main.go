@@ -8,12 +8,15 @@ import (
 	"github.com/JerChol/licensed-media-preview-platform/internal/api"
 	"github.com/JerChol/licensed-media-preview-platform/internal/config"
 	"github.com/JerChol/licensed-media-preview-platform/internal/queue"
+	"github.com/JerChol/licensed-media-preview-platform/internal/storage"
 	"github.com/JerChol/licensed-media-preview-platform/internal/store"
 )
 
 func main() {
 	ctx := context.Background()
-	jobQueue := queue.NewRedisQueue("localhost:6379")
+
+	redisCfg := config.LoadRedisConfig()
+	jobQueue := queue.NewRedisQueue(redisCfg.Addr, redisCfg.Password, redisCfg.UseTLS)
 
 	pgStore, err := store.NewPostgresStore(ctx, config.PostgresDSN())
 	if err != nil {
@@ -24,19 +27,27 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to load sources: %v", err)
 	}
+
+	s3Cfg := config.LoadS3Config()
+	s3Store, err := storage.NewS3Storage(ctx, s3Cfg.BucketName, s3Cfg.Region)
+	if err != nil {
+		log.Fatalf("failed to set up s3 storage: %v", err)
+	}
+
 	log.Printf("loaded %d allowlisted sources", len(sources))
 
 	server := &api.Server{
 		Store:   pgStore,
 		Sources: sources,
 		Queue:   jobQueue,
+		S3:      s3Store,
 	}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /jobs", server.HandleCreateJob)
 	mux.HandleFunc("GET /jobs/{id}", server.HandleGetJob)
 	mux.HandleFunc("GET /jobs/{id}/artifacts", server.HandleGetJobArtifacts)
-	mux.Handle("GET /artifacts/", http.StripPrefix("/artifacts/", http.FileServer(http.Dir("data/artifacts"))))
+	mux.HandleFunc("GET /artifacts/{artifactId}", server.HandleGetArtifactFile)
 
 	log.Println("API server listening on :8080")
 	log.Fatal(http.ListenAndServe(":8080", withCORS(mux)))

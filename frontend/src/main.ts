@@ -1,6 +1,6 @@
 import "./style.css"; // Ignore any error on this line.
 import type { Job, Artifact } from "./types.js";
-import { createJob, getJob, getJobArtifacts, JobCreationError } from "./api.js";
+import { createJob, getJob, getJobArtifacts, JobCreationError, API_BASE } from "./api.js";
 
 const FRIENDLY_ERRORS: Record<string, string> = {
   unknown_source: "That URL isn't from a source we're allowed to preview yet.",
@@ -58,7 +58,7 @@ async function renderArtifacts(artifacts: Artifact[]) {
 
   for (const artifact of artifacts) {
     const publicPath = artifact.storage_path.replace(/^data\//, "");
-    const fileUrl = `http://localhost:8080/artifacts/${artifact.id}`;
+    const fileUrl = `${API_BASE}/artifacts/${artifact.id}`;
 
     if (artifact.artifact_type === "text_snippet"){
       const response = await fetch(fileUrl);

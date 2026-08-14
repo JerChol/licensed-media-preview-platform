@@ -1,6 +1,6 @@
 import type { Job, Artifact } from "./types.js";
 
-const API_BASE = import.meta.env.VITE_API_BASE;
+export const API_BASE = import.meta.env.VITE_API_BASE;
 
 export class JobCreationError extends Error {
   code: string;

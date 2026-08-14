@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"path/filepath"
 	"time"
@@ -33,6 +34,8 @@ func main() {
 
 	redisCfg := config.LoadRedisConfig()
 	jobQueue := queue.NewRedisQueue(redisCfg.Addr, redisCfg.Password, redisCfg.UseTLS)
+
+	go startHealthServer()
 
 	log.Println("Worker started, waiting for jobs...")
 
@@ -131,4 +134,20 @@ func processJob(ctx context.Context, s *store.PostgresStore, s3s *storage.S3Stor
 	}
 
 	log.Printf("job %s marked done", jobID)
+}
+
+// startHealthServer runs a minimal HTTP server so Render(hosting provider) treats this as a valid web service. It has no real functionality - it exists purely to satisfy Render's health checks and give an external uptime pinger something to hit.
+func startHealthServer() {
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("worker is running"))
+	})
+
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+
+	log.Printf("Health check server listening on :%s", port)
+	log.Fatal(http.ListenAndServe(":"+port, nil))
 }

@@ -12,6 +12,11 @@ import (
 	"github.com/JerChol/licensed-media-preview-platform/internal/store"
 )
 
+var allowedOrigins = map[string]bool{
+	"http://localhost:5173": true,
+	"https://licensed-media-preview-platform.jermainchol.workers.dev": true,
+}
+
 func main() {
 	ctx := context.Background()
 
@@ -56,7 +61,10 @@ func main() {
 // withCORS wraps a handler, adding headers that allow the vite dev server (a different origin) to call this API from the browser.
 func withCORS(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "http://localhost:5173")
+		origin := r.Header.Get("Origin")
+		if allowedOrigins[origin] {
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+		}
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 

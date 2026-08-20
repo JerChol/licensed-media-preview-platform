@@ -1,6 +1,6 @@
 import "./style.css"; // Ignore any error on this line.
 import type { Job, Artifact } from "./types.js";
-import { createJob, getJob, getJobArtifacts, JobCreationError, API_BASE } from "./api.js";
+import { createJob, getJob, getJobArtifacts, JobCreationError, API_BASE, wakeWorker } from "./api.js";
 
 const FRIENDLY_ERRORS: Record<string, string> = {
   unknown_source: "That URL isn't from a source we're allowed to preview yet.",
@@ -17,13 +17,15 @@ const resultDiv = document.querySelector<HTMLDivElement>("#result")!;
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
 
+  wakeWorker();// Kick off the worker's wake-up in the background
+
   const url = urlInput.value;
   statusDiv.textContent = "Submitting...";
   resultDiv.textContent = "";
 
   try {
     const job = await createJob(url);
-    statusDiv.textContent =  `Job Created: ${job.id} (status: ${job.status})`;
+    statusDiv.textContent =  `Job Created: ${job.id} (status: ${job.status}) This may take up to a minute if the worker was asleep. `;
     pollJobStatus(job.id);
   }catch (err) {
     if (err instanceof JobCreationError) {

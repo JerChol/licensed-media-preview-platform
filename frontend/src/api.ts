@@ -2,6 +2,8 @@ import type { Job, Artifact } from "./types.js";
 
 export const API_BASE = import.meta.env.VITE_API_BASE;
 
+export const WORKER_URL = import.meta.env.VITE_WORKER_URL;
+
 export class JobCreationError extends Error {
   code: string;
   constructor(code: string, message: string){
@@ -43,4 +45,11 @@ export async function getJobArtifacts(jobId: string): Promise<Artifact[]> {
     throw new Error("Failed to fetch artifacts");
   }
   return response.json() as Promise<Artifact[]>
+}
+
+// Fires a request to wake the worker if it's asleep (Render free tier). Intentionally not awaited by callers - this just kicks off the wake-up process in the background; errors are ignored since this is best-effort.
+export function wakeWorker(): void{
+  fetch(WORKER_URL).catch(() => {
+    // Ignore failures - if this doesn't work, the job will just wait in the queue a bit longer until something else wakes it.
+  });
 }
